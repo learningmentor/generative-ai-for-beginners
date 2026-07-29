@@ -1,0 +1,179 @@
+# ट्रांसक्रिप्शन डेटा तैयारी
+
+ट्रांसक्रिप्शन डेटा तैयारी स्क्रिप्ट YouTube वीडियो ट्रांस्क्रिप्ट डाउनलोड करती है और उन्हें OpenAI इम्बेडिंग्स और फ़ंक्शंस के साथ सेमांटिक सर्च नमूना में उपयोग के लिए तैयार करती है।
+
+ट्रांसक्रिप्शन डेटा तैयारी स्क्रिप्ट नवीनतम रिलीज़ विंडोज़ 11, macOS वेंचुरा और Ubuntu 22.04 (और उसके ऊपर) पर टेस्ट की गई हैं।
+
+## आवश्यक Azure OpenAI सेवा संसाधन बनाएँ
+
+> [!IMPORTANT]
+> हम सुझाव देते हैं कि आप OpenAI के साथ संगतता सुनिश्चित करने के लिए Azure CLI को नवीनतम संस्करण में अपडेट करें
+> देखें [दस्तावेज़](https://learn.microsoft.com/cli/azure/update-azure-cli?WT.mc_id=academic-105485-koreyst)
+
+1. एक रिसोर्स ग्रुप बनाएं
+
+> [!NOTE]
+> इन निर्देशों के लिए हम "semantic-video-search" नामक रिसोर्स ग्रुप East US में उपयोग कर रहे हैं।
+> आप रिसोर्स ग्रुप का नाम बदल सकते हैं, लेकिन संसाधनों के स्थान को बदलते समय,
+> [मॉडल उपलब्धता तालिका](https://aka.ms/oai/models?WT.mc_id=academic-105485-koreyst) जांचें।
+
+```console
+az group create --name semantic-video-search --location eastus
+```
+
+1. एक Azure OpenAI सेवा संसाधन बनाएँ।
+
+```console
+az cognitiveservices account create --name semantic-video-openai --resource-group semantic-video-search \
+    --location eastus --kind OpenAI --sku s0
+```
+
+1. इस एप्लिकेशन में उपयोग के लिए एन्डपॉइंट और कीज़ प्राप्त करें
+
+```console
+az cognitiveservices account show --name semantic-video-openai \
+   --resource-group  semantic-video-search | jq -r .properties.endpoint
+az cognitiveservices account keys list --name semantic-video-openai \
+   --resource-group semantic-video-search | jq -r .key1
+```
+
+1. निम्नलिखित मॉडल तैनात करें:
+   - `text-embedding-ada-002` संस्करण `2` या उससे ऊपर, नामित `text-embedding-ada-002`
+   - `gpt-4o-mini` नामित `gpt-4o-mini`
+
+```console
+az cognitiveservices account deployment create \
+    --name semantic-video-openai \
+    --resource-group  semantic-video-search \
+    --deployment-name text-embedding-ada-002 \
+    --model-name text-embedding-ada-002 \
+    --model-version "2"  \
+    --model-format OpenAI \
+    --scale-settings-scale-type "Standard"
+az cognitiveservices account deployment create \
+    --name semantic-video-openai \
+    --resource-group  semantic-video-search \
+    --deployment-name gpt-4o-mini \
+    --model-name gpt-4o-mini \
+    --model-format OpenAI \
+    --sku-capacity 100 \
+    --sku-name "Standard"
+```
+
+## आवश्यक सॉफ़्टवेयर
+
+- [Python 3.9](https://www.python.org/downloads/?WT.mc_id=academic-105485-koreyst) या उससे ऊपर
+
+## पर्यावरण चर (Environment variables)
+
+YouTube ट्रांसक्रिप्शन डेटा तैयारी स्क्रिप्ट चलाने के लिए निम्नलिखित पर्यावरण चर आवश्यक हैं।
+
+### विंडोज़ पर
+
+आपको सुझाव दिया जाता है कि आप इन चर को अपने `user` पर्यावरण चर में जोड़ें।
+`Windows Start` > `Edit the system environment variables` > `Environment Variables` > [USER] के लिए `User variables` > `New`.
+
+```text
+AZURE_OPENAI_API_KEY  \<your Azure OpenAI Service API key>
+AZURE_OPENAI_ENDPOINT \<your Azure OpenAI Service endpoint>
+AZURE_OPENAI_MODEL_DEPLOYMENT_NAME \<your Azure OpenAI Service model deployment name>
+GOOGLE_DEVELOPER_API_KEY = \<your Google developer API key>
+```
+
+<!-- आप अपने PowerShell प्रोफ़ाइल में भी पर्यावरण चर जोड़ सकते हैं।
+
+```powershell
+$env:AZURE_OPENAI_API_KEY = "<आपकी Azure OpenAI सेवा API कुंजी>"
+$env:AZURE_OPENAI_ENDPOINT = "<आपका Azure OpenAI सेवा एन्डपॉइंट>"
+$env:AZURE_OPENAI_MODEL_DEPLOYMENT_NAME = "<आपकी Azure OpenAI सेवा मॉडल तैनाती का नाम>"
+$env:GOOGLE_DEVELOPER_API_KEY = "<आपकी Google डेवलपर API कुंजी>"
+``` -->
+
+### लिनक्स और macOS पर
+
+अपने `~/.bashrc` या `~/.zshrc` फाइल में निम्न एक्पोर्ट जोड़ने की सलाह दी जाती है।
+
+```bash
+export AZURE_OPENAI_API_KEY=<your Azure OpenAI Service API key>
+export AZURE_OPENAI_ENDPOINT=<your Azure OpenAI Service endpoint>
+export AZURE_OPENAI_MODEL_DEPLOYMENT_NAME=<your Azure OpenAI Service model deployment name>
+export GOOGLE_DEVELOPER_API_KEY=<your Google developer API key>
+```
+
+## आवश्यक Python लाइब्रेरीज़ इंस्टॉल करें
+
+1. यदि पहले से इंस्टॉल नहीं है तो [git क्लाइंट](https://git-scm.com/downloads?WT.mc_id=academic-105485-koreyst) इंस्टॉल करें।
+1. एक `Terminal` विंडो से, नमूना को अपनी पसंदीदा रिपॉजिटरी फोल्डर में क्लोन करें।
+
+    ```bash
+    git clone https://github.com/gloveboxes/semanic-search-openai-embeddings-functions.git
+    ```
+
+1. `data_prep` फोल्डर में जाएँ।
+
+   ```bash
+   cd semanic-search-openai-embeddings-functions/src/data_prep
+   ```
+
+1. एक Python वर्चुअल एनवायरनमेंट बनाएँ।
+
+    विंडोज़ पर:
+
+    ```powershell
+    python -m venv .venv
+    ```
+
+    macOS और लिनक्स पर:
+
+    ```bash
+    python3 -m venv .venv
+    ```
+
+1. Python वर्चुअल एनवायरनमेंट सक्रिय करें।
+
+   विंडोज़ पर:
+
+   ```powershell
+   .venv\Scripts\activate
+   ```
+
+   macOS और लिनक्स पर:
+
+   ```bash
+   source .venv/bin/activate
+   ```
+
+1. आवश्यक लाइब्रेरीज़ इंस्टॉल करें।
+
+   विंडोज़ पर:
+
+   ```powershell
+   pip install -r requirements.txt
+   ```
+
+   macOS और लिनक्स पर:
+
+   ```bash
+   pip3 install -r requirements.txt
+   ```
+
+## YouTube ट्रांसक्रिप्शन डेटा तैयारी स्क्रिप्ट चलाएँ
+
+### विंडोज़ पर
+
+```powershell
+.\transcripts_prepare.ps1
+```
+
+### macOS और लिनक्स पर
+
+```bash
+./transcripts_prepare.sh
+```
+
+---
+
+<!-- CO-OP TRANSLATOR DISCLAIMER START -->
+**अस्वीकरण**:
+इस दस्तावेज़ का अनुवाद AI अनुवाद सेवा [Co-op Translator](https://github.com/Azure/co-op-translator) का उपयोग करके किया गया है। जबकि हम सटीकता के लिए प्रयास करते हैं, कृपया ध्यान दें कि स्वचालित अनुवादों में त्रुटियाँ या अशुद्धियाँ हो सकती हैं। मूल दस्तावेज़ अपनी मूल भाषा में ही प्रामाणिक स्रोत माना जाना चाहिए। महत्वपूर्ण जानकारी के लिए, पेशेवर मानव अनुवाद की सिफारिश की जाती है। इस अनुवाद के उपयोग से उत्पन्न किसी भी गलतफहमी या गलत व्याख्या के लिए हम उत्तरदायी नहीं हैं।
+<!-- CO-OP TRANSLATOR DISCLAIMER END -->

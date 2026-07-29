@@ -1,0 +1,48 @@
+#!meta
+
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"aliases":[],"name":"csharp"}]}}
+
+#!csharp
+
+#r "nuget: Azure.AI.OpenAI, 2.1.0"
+
+#!csharp
+
+using System;
+using System.IO;
+using System.Threading.Tasks;
+using Azure.AI.OpenAI;
+using OpenAI.Images;
+using System.ClientModel;
+
+#!csharp
+
+string endpoint = "<replace with endpoint>";
+string key = "<replace with API key>";
+
+// Enter the name of your image model deployment (for example: gpt-image-2).
+string deployment = "<replace with deployment>";
+
+#!csharp
+
+AzureOpenAIClient azureClient = new(new Uri(endpoint), new ApiKeyCredential(key));
+ImageClient imageClient = azureClient.GetImageClient(deployment);
+
+GeneratedImage image = await imageClient.GenerateImageAsync(
+    "captain with a parrot on his shoulder",
+    new ImageGenerationOptions()
+    {
+        Size = GeneratedImageSize.W1024xH1024,
+    });
+
+// gpt-image models return the image as bytes; DALL-E models returned a URL instead.
+if (image.ImageUri is not null)
+{
+    Console.WriteLine(image.ImageUri);
+}
+else
+{
+    string path = "generated_image.png";
+    await File.WriteAllBytesAsync(path, image.ImageBytes.ToArray());
+    Console.WriteLine($"Image saved to {path}");
+}

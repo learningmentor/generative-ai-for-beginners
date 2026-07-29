@@ -1,0 +1,62 @@
+#!meta
+
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"aliases":[],"name":"csharp"}]}}
+
+#!csharp
+
+#r "nuget: Azure.AI.OpenAI, 2.1.0"
+
+#!csharp
+
+using Azure;
+using Azure.AI.OpenAI;
+using OpenAI.Chat;
+using System.ClientModel;
+using static System.Environment;
+
+string endpoint = "<replace with endpoint>";
+string key = "<replace with API key>";
+
+// Enter the deployment name you chose when you deployed the model (for example: gpt-5-mini).
+string deployment = "<replace with deployment>";
+
+AzureOpenAIClient azureClient = new(new Uri(endpoint), new ApiKeyCredential(key));
+ChatClient chatClient = azureClient.GetChatClient(deployment);
+
+string prompt = "Complete the following: Once upon a time there was a";
+Console.Write($"Input: {prompt}\n");
+
+ChatCompletion completion = chatClient.CompleteChat(new UserChatMessage(prompt));
+Console.WriteLine($"Chatbot: {completion.Content[0].Text}");
+
+#!csharp
+
+Console.Write("No of recipes (for example, 5): ");
+string no_recipes = "2";
+
+Console.Write("List of ingredients (for example, chicken, potatoes, and carrots): ");
+string ingredients = "chocolate";
+
+Console.Write("Filter (for example, vegetarian, vegan, or gluten-free): ");
+string filter = "peanuts";
+
+// interpolate the number of recipes into the prompt an ingredients
+string prompt = $"Show me {no_recipes} recipes for a dish with the following ingredients: {ingredients}. Per recipe, list all the ingredients used, no {filter}: ";
+
+#!csharp
+
+// gpt-5 reasoning models don't support Temperature/top_p, and need a generous output-token
+// budget so the visible answer isn't truncated by reasoning tokens. To experiment with
+// Temperature in .NET, call a non-reasoning model (for example a Llama model such as
+// Llama-3.3-70B-Instruct) via the Azure.AI.Inference SDK against your Foundry Models endpoint -
+// the same way the js-githubmodels sample uses Llama.
+ChatCompletionOptions options = new()
+{
+    MaxOutputTokenCount = 800,
+};
+
+ChatCompletion completion = chatClient.CompleteChat(
+    new[] { new UserChatMessage(prompt) },
+    options);
+Console.WriteLine("==== Recipes ====");
+Console.WriteLine($"Chatbot: {completion.Content[0].Text}");

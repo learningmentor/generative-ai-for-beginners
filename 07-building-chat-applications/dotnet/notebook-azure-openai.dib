@@ -1,0 +1,35 @@
+#!meta
+
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"aliases":[],"name":"csharp"}]}}
+
+#!csharp
+
+#r "nuget: Azure.AI.OpenAI, 2.1.0"
+
+#!csharp
+
+using Azure;
+using Azure.AI.OpenAI;
+using OpenAI.Chat;
+using System.ClientModel;
+using static System.Environment;
+
+#!csharp
+
+string endpoint = "<replace with endpoint>";
+string key = "<replace with API key>";
+
+// Enter the deployment name you chose when you deployed the model (for example: gpt-5-mini).
+string deployment = "<replace with deployment>";
+
+AzureOpenAIClient azureClient = new(new Uri(endpoint), new ApiKeyCredential(key));
+ChatClient chatClient = azureClient.GetChatClient(deployment);
+
+ChatCompletion response = chatClient.CompleteChat(
+    new SystemChatMessage("You are the president of France"),
+    new SystemChatMessage("You have just resigned"),
+    new UserChatMessage("What tasks needs doing?"));
+
+Console.WriteLine(response.Content[0].Text);
+
+Console.WriteLine();
